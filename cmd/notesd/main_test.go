@@ -35,6 +35,26 @@ func TestConfig(t *testing.T) {
 	}
 }
 
+func TestConfigAllowedOrigins(t *testing.T) {
+	cfg, err := loadConfig(env(map[string]string{
+		"NOTES_JWT_SECRET":      strings.Repeat("k", 32),
+		"NOTES_ALLOWED_ORIGINS": " https://a.example, ,https://b.example ",
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.origins) != 2 || cfg.origins[0] != "https://a.example" || cfg.origins[1] != "https://b.example" {
+		t.Fatalf("origins = %q", cfg.origins)
+	}
+	plain, err := loadConfig(env(validEnv))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(plain.origins) != 0 {
+		t.Fatalf("origins without the setting = %q", plain.origins)
+	}
+}
+
 func TestRunWithoutKey(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	if code := run(t.Context(), nil, &stdout, &stderr, env(nil)); code != 2 {
