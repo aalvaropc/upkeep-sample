@@ -26,6 +26,8 @@ type Claims struct {
 
 func (c Claims) Scopes() []string { return strings.Fields(c.Scope) }
 
+func (c Claims) Expiry() time.Time { return time.Unix(c.ExpiresAt, 0).UTC() }
+
 func (c Claims) HasScope(scope string) bool { return slices.Contains(c.Scopes(), scope) }
 
 type Issuer struct {
