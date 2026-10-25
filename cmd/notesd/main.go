@@ -36,10 +36,11 @@ func main() {
 }
 
 type config struct {
-	addr   string
-	key    []byte
-	issuer string
-	ttl    time.Duration
+	addr    string
+	key     []byte
+	issuer  string
+	ttl     time.Duration
+	origins []string
 }
 
 func loadConfig(getenv func(string) string) (config, error) {
@@ -52,6 +53,11 @@ func loadConfig(getenv func(string) string) (config, error) {
 	}
 	if len(cfg.key) < auth.MinKeyLength {
 		return config{}, fmt.Errorf("NOTES_JWT_SECRET must be set to at least %d bytes", auth.MinKeyLength)
+	}
+	for _, origin := range strings.Split(getenv("NOTES_ALLOWED_ORIGINS"), ",") {
+		if origin = strings.TrimSpace(origin); origin != "" {
+			cfg.origins = append(cfg.origins, origin)
+		}
 	}
 	if raw := getenv("NOTES_TOKEN_TTL"); raw != "" {
 		ttl, err := time.ParseDuration(raw)
@@ -77,7 +83,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer, getenv fu
 	switch {
 	case len(args) == 0:
 		svc := notes.NewService(store.NewMemory(), clock.System{})
-		handler := api.NewServer(svc, middleware.NewAuthenticator(issuer))
+		handler := api.WithCORS(api.NewServer(svc, middleware.NewAuthenticator(issuer)), cfg.origins)
 		if err := serve(ctx, cfg.addr, handler, stdout); err != nil {
 			fmt.Fprintf(stderr, "notesd: %v\n", err)
 			return 1
