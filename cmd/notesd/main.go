@@ -83,7 +83,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer, getenv fu
 	switch {
 	case len(args) == 0:
 		svc := notes.NewService(store.NewMemory(), clock.System{})
-		handler := api.WithCORS(api.NewServer(svc, middleware.NewAuthenticator(issuer)), cfg.origins)
+		handler := middleware.RequestID(api.WithCORS(api.NewServer(svc, middleware.NewAuthenticator(issuer)), cfg.origins))
 		if err := serve(ctx, cfg.addr, handler, stdout); err != nil {
 			fmt.Fprintf(stderr, "notesd: %v\n", err)
 			return 1
