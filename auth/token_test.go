@@ -75,8 +75,8 @@ func TestRoundTrip(t *testing.T) {
 	if !claims.HasScope("notes:write") || claims.HasScope("notes:admin") {
 		t.Fatalf("scopes = %v", claims.Scopes())
 	}
-	if claims.ExpiresAt != start().Add(time.Hour).Unix() {
-		t.Fatalf("expires at %d", claims.ExpiresAt)
+	if want := start().Add(time.Hour); !claims.Expiry().Equal(want) {
+		t.Fatalf("expires at %v, want %v", claims.Expiry(), want)
 	}
 }
 
