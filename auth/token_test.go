@@ -2,12 +2,16 @@ package auth
 
 import (
 	"bytes"
+	"crypto/hmac"
+	"crypto/sha256"
+	"crypto/sha512"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
+	"hash"
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/golang-jwt/jwt/v4"
 
 	"github.com/aalvaropc/upkeep-sample/clock"
 )
@@ -24,6 +28,36 @@ func newIssuer(t *testing.T, c clock.Clock) *Issuer {
 }
 
 func start() time.Time { return time.Date(2026, 10, 25, 9, 0, 0, 0, time.UTC) }
+
+func forge(t *testing.T, alg string, claims map[string]any, key []byte) string {
+	t.Helper()
+	encode := func(v any) string {
+		data, err := json.Marshal(v)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return base64.RawURLEncoding.EncodeToString(data)
+	}
+	signingInput := encode(map[string]string{"alg": alg, "typ": "JWT"}) + "." + encode(claims)
+	var newHash func() hash.Hash
+	switch alg {
+	case "HS256":
+		newHash = sha256.New
+	case "HS512":
+		newHash = sha512.New
+	case "none":
+		return signingInput + "."
+	default:
+		t.Fatalf("unsupported algorithm %q", alg)
+	}
+	mac := hmac.New(newHash, key)
+	mac.Write([]byte(signingInput))
+	return signingInput + "." + base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+}
+
+func validClaims() map[string]any {
+	return map[string]any{"sub": "alice", "iss": "notesd", "exp": start().Add(time.Hour).Unix()}
+}
 
 func TestRoundTrip(t *testing.T) {
 	i := newIssuer(t, clock.NewManual(start()))
@@ -91,11 +125,7 @@ func TestWrongIssuer(t *testing.T) {
 
 func TestUnsignedTokenIsRejected(t *testing.T) {
 	c := clock.NewManual(start())
-	claims := Claims{StandardClaims: jwt.StandardClaims{Subject: "alice", Issuer: "notesd", ExpiresAt: start().Add(time.Hour).Unix()}}
-	token, err := jwt.NewWithClaims(jwt.SigningMethodNone, claims).SignedString(jwt.UnsafeAllowNoneSignatureType)
-	if err != nil {
-		t.Fatal(err)
-	}
+	token := forge(t, "none", validClaims(), nil)
 	if _, err := newIssuer(t, c).Parse(token); !errors.Is(err, ErrInvalidToken) {
 		t.Fatalf("Parse error = %v, want ErrInvalidToken", err)
 	}
@@ -103,11 +133,7 @@ func TestUnsignedTokenIsRejected(t *testing.T) {
 
 func TestOtherAlgorithmIsRejected(t *testing.T) {
 	c := clock.NewManual(start())
-	claims := Claims{StandardClaims: jwt.StandardClaims{Subject: "alice", Issuer: "notesd", ExpiresAt: start().Add(time.Hour).Unix()}}
-	token, err := jwt.NewWithClaims(jwt.SigningMethodHS512, claims).SignedString(testKey)
-	if err != nil {
-		t.Fatal(err)
-	}
+	token := forge(t, "HS512", validClaims(), testKey)
 	if _, err := newIssuer(t, c).Parse(token); !errors.Is(err, ErrInvalidToken) {
 		t.Fatalf("Parse error = %v, want ErrInvalidToken", err)
 	}
@@ -115,11 +141,9 @@ func TestOtherAlgorithmIsRejected(t *testing.T) {
 
 func TestEmptySubjectIsRejected(t *testing.T) {
 	c := clock.NewManual(start())
-	claims := Claims{StandardClaims: jwt.StandardClaims{Issuer: "notesd", ExpiresAt: start().Add(time.Hour).Unix()}}
-	token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(testKey)
-	if err != nil {
-		t.Fatal(err)
-	}
+	claims := validClaims()
+	delete(claims, "sub")
+	token := forge(t, "HS256", claims, testKey)
 	if _, err := newIssuer(t, c).Parse(token); !errors.Is(err, ErrInvalidToken) {
 		t.Fatalf("Parse error = %v, want ErrInvalidToken", err)
 	}
@@ -143,5 +167,17 @@ func TestNewIssuerValidates(t *testing.T) {
 	}
 	if _, err := NewIssuer(testKey, "notesd", 0, clock.System{}); err == nil {
 		t.Error("NewIssuer accepted a zero lifetime")
+	}
+}
+
+func TestForgedValidTokenIsAccepted(t *testing.T) {
+	c := clock.NewManual(start())
+	token := forge(t, "HS256", validClaims(), testKey)
+	claims, err := newIssuer(t, c).Parse(token)
+	if err != nil {
+		t.Fatalf("a hand-built HS256 token with valid claims was rejected: %v", err)
+	}
+	if claims.Subject != "alice" {
+		t.Fatalf("subject = %q", claims.Subject)
 	}
 }
