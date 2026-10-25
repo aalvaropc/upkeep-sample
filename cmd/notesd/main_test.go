@@ -4,33 +4,68 @@ import (
 	"bytes"
 	"context"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 )
 
-func TestHealthz(t *testing.T) {
-	rec := httptest.NewRecorder()
-	newHandler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/healthz", nil))
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200", rec.Code)
+func env(values map[string]string) func(string) string {
+	return func(key string) string { return values[key] }
+}
+
+var validEnv = map[string]string{"NOTES_JWT_SECRET": strings.Repeat("k", 32)}
+
+func TestConfig(t *testing.T) {
+	cfg, err := loadConfig(env(validEnv))
+	if err != nil {
+		t.Fatal(err)
 	}
-	if got := rec.Body.String(); got != "{\"status\":\"ok\"}\n" {
-		t.Fatalf("body = %q", got)
+	if cfg.addr != "127.0.0.1:8081" || cfg.issuer != "notesd" || cfg.ttl != time.Hour {
+		t.Fatalf("defaults = %+v", cfg)
 	}
-	if got := rec.Header().Get("Content-Type"); got != "application/json" {
-		t.Fatalf("content type = %q", got)
+	for name, values := range map[string]map[string]string{
+		"no key":    {},
+		"short key": {"NOTES_JWT_SECRET": "short"},
+		"bad ttl":   {"NOTES_JWT_SECRET": strings.Repeat("k", 32), "NOTES_TOKEN_TTL": "soon"},
+		"zero ttl":  {"NOTES_JWT_SECRET": strings.Repeat("k", 32), "NOTES_TOKEN_TTL": "0s"},
+	} {
+		if _, err := loadConfig(env(values)); err == nil {
+			t.Errorf("%s: loadConfig returned no error", name)
+		}
+	}
+}
+
+func TestRunWithoutKey(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	if code := run(t.Context(), nil, &stdout, &stderr, env(nil)); code != 2 {
+		t.Fatalf("exit code = %d, want 2", code)
+	}
+	if !strings.Contains(stderr.String(), "NOTES_JWT_SECRET") {
+		t.Fatalf("stderr = %q", stderr.String())
 	}
 }
 
 func TestRunRejectsArguments(t *testing.T) {
 	var stdout, stderr bytes.Buffer
-	if code := run(t.Context(), []string{"extra"}, &stdout, &stderr, func(string) string { return "" }); code != 2 {
+	if code := run(t.Context(), []string{"extra"}, &stdout, &stderr, env(validEnv)); code != 2 {
 		t.Fatalf("exit code = %d, want 2", code)
 	}
 	if !strings.Contains(stderr.String(), "unexpected argument") {
 		t.Fatalf("stderr = %q", stderr.String())
+	}
+}
+
+func TestTokenCommand(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	if code := run(t.Context(), []string{"token", "-sub", "alice", "-scope", "notes:write"}, &stdout, &stderr, env(validEnv)); code != 0 {
+		t.Fatalf("exit code = %d; stderr %s", code, stderr.String())
+	}
+	if parts := strings.Split(strings.TrimSpace(stdout.String()), "."); len(parts) != 3 {
+		t.Fatalf("token = %q, want three dot-separated parts", stdout.String())
+	}
+	stderr.Reset()
+	if code := run(t.Context(), []string{"token"}, &stdout, &stderr, env(validEnv)); code != 2 || !strings.Contains(stderr.String(), "-sub is required") {
+		t.Fatalf("token without -sub: exit %d, stderr %q", code, stderr.String())
 	}
 }
 
@@ -45,7 +80,8 @@ func TestServeStopsOnCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	stdout := make(signalWriter, 1)
 	done := make(chan error, 1)
-	go func() { done <- serve(ctx, "127.0.0.1:0", newHandler(), stdout) }()
+	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
+	go func() { done <- serve(ctx, "127.0.0.1:0", handler, stdout) }()
 	select {
 	case line := <-stdout:
 		if !strings.HasPrefix(line, "notesd listening on 127.0.0.1:") {
