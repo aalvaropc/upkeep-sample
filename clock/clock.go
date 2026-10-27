@@ -15,7 +15,7 @@ type System struct{}
 func (System) Now() time.Time { return time.Now() }
 
 type Manual struct {
-	fake clockwork.FakeClock
+	fake *clockwork.FakeClock
 }
 
 func NewManual(start time.Time) *Manual {
