@@ -1,6 +1,8 @@
 # upkeep-sample
 
-A small Go notes API with token authentication and a real test suite. It is the demo target for [Upkeep](https://github.com/aalvaropc/upkeep): its open pull requests are the ones Upkeep works on.
+A small Go notes API with token authentication and a real test suite. It is the demo target for [Upkeep](https://github.com/aalvaropc/upkeep):
+- **Demo scenario:** Upkeep's demo builds nine pull requests on top of this code from recipes in Upkeep's repository, one blocker each, so they are not open here.
+- **Real pull requests:** Upkeep also runs here as a GitHub Action on the real pull requests Dependabot opens.
 
 ## Run
 
@@ -26,6 +28,7 @@ curl -s -H "Authorization: Bearer $token" http://127.0.0.1:8081/v1/notes
 | `NOTES_ADDR` | `127.0.0.1:8081` | listen address |
 | `NOTES_ISSUER` | `notesd` | token issuer |
 | `NOTES_TOKEN_TTL` | `1h` | token lifetime |
+| `NOTES_ALLOWED_ORIGINS` | none | origins allowed by CORS, separated by commas; none means no CORS headers |
 
 ## API
 
@@ -40,11 +43,16 @@ Every route except `/healthz` needs `Authorization: Bearer <token>`. Writes need
 | `PUT /v1/notes/{id}` | replace a note's title, body and tags |
 | `DELETE /v1/notes/{id}` | delete a note |
 
-Errors are JSON: `{"error": {"code": "not_found", "message": "note not found"}}`.
+Errors are JSON: `{"error": {"code": "not_found", "message": "note not found"}}`. Every response carries an `X-Request-Id` header: the request's own ID when it sends a valid ULID, otherwise a new one.
 
 ## Development
 
-`make check` runs what CI runs: gofmt, `go mod tidy`, `go vet`, the tests with the race detector, and the build. `make smoke` starts the server and calls it with a fresh token.
+`make check` runs gofmt, `go mod tidy`, `go vet`, the tests with the race detector, and the build. `make smoke` starts the server and calls it with a fresh token. CI runs both, plus secret scanning and a check that every pull request targets `main`.
+
+| Workflow | What it does |
+|---|---|
+| `.github/workflows/upkeep.yml` | runs Upkeep every day, from the Actions tab, or on a `/upkeep` comment by a maintainer |
+| `.github/dependabot.yml` | keeps the Go modules up to date |
 
 ## License
 
