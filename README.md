@@ -51,7 +51,7 @@ Errors are JSON: `{"error": {"code": "not_found", "message": "note not found"}}`
 
 | Workflow | What it does |
 |---|---|
-| `.github/workflows/upkeep.yml` | runs Upkeep every day, from the Actions tab, or on a `/upkeep` comment by a maintainer |
+| `.github/workflows/upkeep.yml` | runs Upkeep from the Actions tab, or on a `/upkeep` comment by a maintainer |
 | `.github/dependabot.yml` | keeps the Go modules up to date |
 
 ## License
