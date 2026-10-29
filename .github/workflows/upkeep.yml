@@ -28,7 +28,7 @@ jobs:
       group: upkeep
       cancel-in-progress: false
     steps:
-      - uses: aalvaropc/upkeep@v0.2.1
+      - uses: aalvaropc/upkeep@v0.2.2
         with:
           pull-requests: ${{ inputs.pull-requests }}
           dry-run: ${{ inputs.dry-run || false }}
@@ -49,7 +49,7 @@ jobs:
       group: upkeep
       cancel-in-progress: false
     steps:
-      - uses: aalvaropc/upkeep@v0.2.1
+      - uses: aalvaropc/upkeep@v0.2.2
         with:
           pull-requests: ${{ github.event.issue.number }}
           nebius-api-key: ${{ secrets.NEBIUS_API_KEY }}
