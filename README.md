@@ -2,7 +2,7 @@
 
 A small Go notes API with token authentication and a real test suite. It is the demo target for [Upkeep](https://github.com/aalvaropc/upkeep):
 - **Demo scenario:** Upkeep's demo builds nine pull requests on top of this code from recipes in Upkeep's repository, one blocker each, so they are not open here.
-- **Real pull requests:** Upkeep also runs here as a GitHub Action on the real pull requests Dependabot opens.
+- **Real pull requests:** Upkeep also ran here, from the command line and as a GitHub Action, on the three real pull requests Dependabot opened.
 
 ## Run
 
@@ -52,7 +52,6 @@ Errors are JSON: `{"error": {"code": "not_found", "message": "note not found"}}`
 | Workflow | What it does |
 |---|---|
 | `.github/workflows/upkeep.yml` | runs Upkeep from the Actions tab, or on a `/upkeep` comment by a maintainer |
-| `.github/dependabot.yml` | keeps the Go modules up to date |
 
 ## License
 
